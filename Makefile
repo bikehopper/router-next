@@ -1,0 +1,2 @@
+setup:
+	lefthook install
