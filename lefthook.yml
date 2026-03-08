@@ -3,7 +3,7 @@ pre-commit:
   commands:
     lint:
       glob: "*.go"
-      run: golangci-lint run --fix ./... && git add {staged_files}
+      run: golangci-lint run --fix ./... ; git add {staged_files}
     vet:
       glob: "*.go"
       run: go vet ./...

@@ -9,6 +9,7 @@ linters:
     - depguard
     - nlreturn
     - mnd
+    - godox
   settings:
     wsl_v5:
       allow-first-in-block: true

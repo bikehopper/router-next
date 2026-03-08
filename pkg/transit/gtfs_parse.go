@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -30,12 +31,16 @@ type GtfsTrip struct {
 	GtfsServiceID string
 }
 
-type RowParser[T any] func(colGetter func(string) string) (*T, error)
+type GtfsTable struct {
+	Stops     []GtfsStop
+	Trips     []GtfsTrip
+	StopTimes []GtfsStopTime
+}
 
 func toUint(s string) (uint32, error) {
 	val, err := strconv.ParseUint(s, 10, 32)
 	if err != nil {
-		return 0, fmt.Errorf("invalid uint: %w", err)
+		return 0, fmt.Errorf("invalid uint %s: %w", s, err)
 	}
 
 	return uint32(val), nil
@@ -76,6 +81,8 @@ func gtfsTimeToSeconds(gtfsTime string) (uint32, error) {
 
 	return totalSeconds, nil
 }
+
+type RowParser[T any] func(colGetter func(string) string) (*T, error)
 
 func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 	if f == nil {
@@ -127,7 +134,8 @@ func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 
 		parsedValue, err := parser(colGetter)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse row: %w", err)
+			// TODO: handle rows that don't parse properly
+			continue
 		}
 
 		results = append(results, *parsedValue)
@@ -136,7 +144,7 @@ func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 	return results, nil
 }
 
-func ParseStops(f *zip.File) ([]GtfsStop, error) {
+func parseStops(f *zip.File) ([]GtfsStop, error) {
 	return parseCSVFile(f, func(colGetter func(string) string) (*GtfsStop, error) {
 		lat, err := toFloat(colGetter("stop_lat"))
 		if err != nil {
@@ -157,7 +165,7 @@ func ParseStops(f *zip.File) ([]GtfsStop, error) {
 	})
 }
 
-func ParseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
+func parseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
 	return parseCSVFile(f, func(colGetter func(string) string) (*GtfsStopTime, error) {
 		arrivalTime, err := gtfsTimeToSeconds(colGetter("arrival_time"))
 		if err != nil {
@@ -169,7 +177,7 @@ func ParseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
 			return nil, fmt.Errorf("failed to parse departure_time: %w", err)
 		}
 
-		stopSequence, err := toUint("stop_sequence")
+		stopSequence, err := toUint(colGetter("stop_sequence"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse stop_sequence: %w", err)
 		}
@@ -182,4 +190,49 @@ func ParseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
 			StopSequence:  stopSequence,
 		}, nil
 	})
+}
+
+func parseTrips(f *zip.File) ([]GtfsTrip, error) {
+	return parseCSVFile(f, func(colGetter func(string) string) (*GtfsTrip, error) {
+		return &GtfsTrip{
+			GtfsID:        colGetter("trip_id"),
+			GtfsRouteID:   colGetter("route_id"),
+			GtfsServiceID: colGetter("service_id"),
+		}, nil
+	})
+}
+
+func ParseGtfs(zipFilePath string) (*GtfsTable, error) {
+	reader, err := zip.OpenReader(zipFilePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+		os.Exit(1)
+	}
+	defer reader.Close()
+
+	files := make(map[string]*zip.File)
+	for _, file := range reader.File {
+		files[file.Name] = file
+	}
+
+	stops, err := parseStops(files["stops.txt"])
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse stops: %w", err)
+	}
+
+	trips, err := parseTrips(files["trips.txt"])
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse trips: %w", err)
+	}
+
+	stopTimes, err := parseStopTimes(files["stop_times.txt"])
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse stop times: %w", err)
+	}
+
+	return &GtfsTable{
+		Stops:     stops,
+		Trips:     trips,
+		StopTimes: stopTimes,
+	}, nil
 }

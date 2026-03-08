@@ -25,13 +25,32 @@ type RaptorTable struct {
 	Stops  []Stop
 	Routes []Route
 
-	StopIds            []types.StopID
+	StopIdsByRoute     []types.StopID
 	FirstStopIDOfRoute []uint32
 
-	StopEvents            []StopEvent
+	StopEventsByRoute     []StopEvent
 	FirstStopEventOfRoute []uint32
 	NumTripsInRoute       []uint32
 
-	RouteSegments           []RouteSegment
+	RouteSegmentsByStop     []RouteSegment
 	FirstRouteSegmentOfStop []uint32
+}
+
+func buildRaptorTable(gtfsTable GtfsTable) (RaptorTable, error) {
+	gtfsStopIdToIdx := make(map[string]types.StopID, len(gtfsTable.Stops))
+	for idx, stop := range gtfsTable.Stops {
+		gtfsStopIdToIdx[stop.GtfsID] = types.StopID(idx)
+	}
+
+	return RaptorTable{
+		Stops:                   nil,
+		Routes:                  nil,
+		StopIdsByRoute:          nil,
+		FirstStopIDOfRoute:      nil,
+		StopEventsByRoute:       nil,
+		FirstStopEventOfRoute:   nil,
+		NumTripsInRoute:         nil,
+		RouteSegmentsByStop:     nil,
+		FirstRouteSegmentOfStop: nil,
+	}, nil
 }
