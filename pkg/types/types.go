@@ -1,6 +1,6 @@
 package types
 
-type StopId = uint32
-type RouteId = uint32
-type TripId = uint32
-type StopIndex = uint32
+type StopID uint32
+type RouteID uint32
+type TripID uint32
+type StopIndex uint32

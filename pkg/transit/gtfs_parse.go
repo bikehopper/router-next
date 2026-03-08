@@ -5,16 +5,22 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"strconv"
 )
 
 type GtfsStop struct {
 	ID   string
 	Name string
-	Lat  string
-	Lon  string
+	Lat  float64
+	Lon  float64
 }
 
 type RowParser[T any] func(colGetter func(string) string) (T, error)
+
+func toFloat(s string) float64 {
+	val, _ := strconv.ParseFloat(s, 64)
+	return val
+}
 
 func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 	if f == nil {
@@ -58,6 +64,9 @@ func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 		}
 		colGetter := buildColGetter(row)
 		parsedValue, err := parser(colGetter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse row: %w", err)
+		}
 		results = append(results, parsedValue)
 	}
 	return results, nil
@@ -68,8 +77,8 @@ func ParseStops(f *zip.File) ([]GtfsStop, error) {
 		return GtfsStop{
 			ID:   colGetter("stop_id"),
 			Name: colGetter("stop_name"),
-			Lat:  colGetter("stop_lat"),
-			Lon:  colGetter("stop_lon"),
+			Lat:  toFloat(colGetter("stop_lat")),
+			Lon:  toFloat(colGetter("stop_lon")),
 		}, nil
 	})
 }
