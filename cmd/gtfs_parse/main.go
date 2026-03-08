@@ -26,12 +26,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
+
 	fmt.Printf("detected %d stops\n", len(stops))
+
 	for idx, stop := range stops[:10] {
 		fmt.Printf(
 			"stop %d: id %s name %s coords (%f, %f)\n",
 			idx,
-			stop.ID,
+			stop.GtfsID,
 			stop.Name,
 			stop.Lat,
 			stop.Lon,
