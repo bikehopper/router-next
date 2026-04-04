@@ -44,8 +44,10 @@ type RaptorTable struct {
 	Stops  []GtfsStop
 	Routes []GtfsRoute
 
+	MinTransferTime []uint32
+
 	StopIdsByRoute     []types.StopID
-	FirstStopIDOfRoute []types.StopID
+	FirstStopIDOfRoute []uint32
 
 	StopEventsByRoute     []StopEvent
 	FirstStopEventOfRoute []uint32
@@ -177,7 +179,7 @@ func BuildRaptorTable(gtfsTable GtfsTable) (RaptorTable, error) {
 	numRoutes := len(routes)
 	numStops := len(gtfsTable.Stops)
 
-	firstStopIdOfRoute := make([]types.StopID, numRoutes+1)
+	firstStopIdOfRoute := make([]uint32, numRoutes+1)
 	firstStopEventOfRoute := make([]uint32, numRoutes+1)
 	numTripsInRoute := make([]uint32, numRoutes)
 	segmentCountByStop := make([]uint32, numStops)
@@ -200,7 +202,7 @@ func BuildRaptorTable(gtfsTable GtfsTable) (RaptorTable, error) {
 		gtfsRoute := gtfsTable.Routes[gtfsRouteIdx]
 		allRoutes[routeId] = gtfsRoute
 
-		firstStopIdOfRoute[routeId] = types.StopID(len(allStopIds))
+		firstStopIdOfRoute[routeId] = uint32(len(allStopIds))
 		allStopIds = append(allStopIds, route.stopSequence...)
 
 		firstStopEventOfRoute[routeId] = uint32(len(allStopEvents))
@@ -228,7 +230,7 @@ func BuildRaptorTable(gtfsTable GtfsTable) (RaptorTable, error) {
 		}
 	}
 
-	firstStopIdOfRoute[numRoutes] = types.StopID(len(allStopIds))
+	firstStopIdOfRoute[numRoutes] = uint32(len(allStopIds))
 	firstStopEventOfRoute[numRoutes] = uint32(len(allStopEvents))
 	firstTripOfRoute[numRoutes] = uint32(len(allTrips))
 
@@ -252,9 +254,25 @@ func BuildRaptorTable(gtfsTable GtfsTable) (RaptorTable, error) {
 		}
 	}
 
+	minTransferTime := make([]uint32, numStops)
+
+	for _, transfer := range gtfsTable.Transfers {
+		if transfer.TransferType != 2 {
+			continue
+		}
+
+		if transfer.FromStopId != transfer.ToStopId {
+			continue
+		}
+
+		stopId := gtfsStopIdToIdx[transfer.FromStopId]
+		minTransferTime[stopId] = transfer.MinTransferTime
+	}
+
 	return RaptorTable{
 		Stops:                   gtfsTable.Stops,
 		Routes:                  allRoutes,
+		MinTransferTime:         minTransferTime,
 		StopIdsByRoute:          allStopIds,
 		FirstStopIDOfRoute:      firstStopIdOfRoute,
 		StopEventsByRoute:       allStopEvents,
