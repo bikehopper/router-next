@@ -324,7 +324,7 @@ func ParseGtfs(zipFilePath string) (*GtfsTable, error) {
 		return nil, fmt.Errorf("Failed to parse transfers: %w", err)
 	}
 
-	fmt.Printf("Found %d stop times\n", len(stopTimes))
+	fmt.Printf("Found %d transfers\n", len(transfers))
 
 	return &GtfsTable{
 		Routes:    routes,
