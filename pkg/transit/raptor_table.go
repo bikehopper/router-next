@@ -39,10 +39,9 @@ type RouteSegment struct {
 	StopIndex uint32
 }
 
-type RouteStopOffsets []uint32      // indexed by types.RouteID
-type RouteStopEventOffsets []uint32 // indexed by types.RouteID
-type RouteTripOffsets []uint32      // indexed by types.RouteID
-
+type RouteStopOffsets []uint32        // indexed by types.RouteID
+type RouteStopEventOffsets []uint32   // indexed by types.RouteID
+type RouteTripOffsets []uint32        // indexed by types.RouteID
 type StopRouteSegmentOffsets []uint32 // indexed by types.StopID
 type StopTransferTimes []uint32       // indexed by types.StopID
 
