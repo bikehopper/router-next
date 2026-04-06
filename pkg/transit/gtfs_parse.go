@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"router/pkg/types"
 	"strconv"
 	"strings"
 )
@@ -42,8 +43,8 @@ type GTFSStop struct {
 type GTFSStopTime struct {
 	GtfsTripId    GTFSTripID
 	GtfsStopId    GTFSStopID
-	ArrivalTime   uint32
-	DepartureTime uint32
+	ArrivalTime   types.Timestamp
+	DepartureTime types.Timestamp
 	StopSequence  uint32
 }
 
@@ -249,7 +250,7 @@ func parseStopTimes(f *zip.File) ([]GTFSStopTime, error) {
 			return nil, fmt.Errorf("failed to parse arrival_time: %w", err)
 		}
 
-		departure_time, err := gtfsTimeToSeconds(colGetter("departure_time"))
+		departureTime, err := gtfsTimeToSeconds(colGetter("departure_time"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse departure_time: %w", err)
 		}
@@ -262,8 +263,8 @@ func parseStopTimes(f *zip.File) ([]GTFSStopTime, error) {
 		return &GTFSStopTime{
 			GtfsStopId:    GTFSStopID(colGetter("stop_id")),
 			GtfsTripId:    GTFSTripID(colGetter("trip_id")),
-			ArrivalTime:   arrivalTime,
-			DepartureTime: departure_time,
+			ArrivalTime:   types.Timestamp(arrivalTime),
+			DepartureTime: types.Timestamp(departureTime),
 			StopSequence:  stopSequence,
 		}, nil
 	})
