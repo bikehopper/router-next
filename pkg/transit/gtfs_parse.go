@@ -10,56 +10,56 @@ import (
 	"strings"
 )
 
-type GtfsStopID string
-type GtfsTripID string
-type GtfsRouteID string
-type GtfsAgencyID string
-type GtfsServiceID string
+type GTFSStopID string
+type GTFSTripID string
+type GTFSRouteID string
+type GTFSAgencyID string
+type GTFSServiceID string
 
-type GtfsRoute struct {
-	GtfsID       GtfsRouteID
-	GtfsAgencyID GtfsAgencyID
+type GTFSRoute struct {
+	GtfsId       GTFSRouteID
+	GtfsAgencyId GTFSAgencyID
 	ShortName    string
 	LongName     string
 	RouteType    uint32
 	Color        string
 }
 
-type GtfsTrip struct {
-	GtfsID        GtfsTripID
-	GtfsRouteID   GtfsRouteID
-	GtfsServiceID GtfsServiceID
+type GTFSTrip struct {
+	GtfsId        GTFSTripID
+	GtfsRouteId   GTFSRouteID
+	GtfsServiceId GTFSServiceID
 	Headsign      string
 }
 
-type GtfsStop struct {
-	GtfsID GtfsStopID
+type GTFSStop struct {
+	GtfsId GTFSStopID
 	Name   string
 	Lat    float64
 	Lon    float64
 }
 
-type GtfsStopTime struct {
-	GtfsTripID    GtfsTripID
-	GtfsStopID    GtfsStopID
+type GTFSStopTime struct {
+	GtfsTripId    GTFSTripID
+	GtfsStopId    GTFSStopID
 	ArrivalTime   uint32
 	DepartureTime uint32
 	StopSequence  uint32
 }
 
-type GtfsTransfer struct {
-	FromStopId      GtfsStopID
-	ToStopId        GtfsStopID
+type GTFSTransfer struct {
+	FromStopId      GTFSStopID
+	ToStopId        GTFSStopID
 	TransferType    uint32
 	MinTransferTime uint32
 }
 
-type GtfsTable struct {
-	Routes    []GtfsRoute
-	Trips     []GtfsTrip
-	Stops     []GtfsStop
-	StopTimes []GtfsStopTime
-	Transfers []GtfsTransfer
+type GTFSTable struct {
+	Routes    []GTFSRoute
+	Trips     []GTFSTrip
+	Stops     []GTFSStop
+	StopTimes []GTFSStopTime
+	Transfers []GTFSTransfer
 }
 
 func toUint(s string) (uint32, error) {
@@ -169,18 +169,18 @@ func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 	return results, nil
 }
 
-func parseRoutes(f *zip.File) ([]GtfsRoute, error) {
+func parseRoutes(f *zip.File) ([]GTFSRoute, error) {
 	println("Parsing routes")
 
-	routes, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsRoute, error) {
+	routes, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSRoute, error) {
 		routeType, err := toUint(colGetter(("route_type")))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse route_type: %w", err)
 		}
 
-		return &GtfsRoute{
-			GtfsID:       GtfsRouteID(colGetter("route_id")),
-			GtfsAgencyID: GtfsAgencyID(colGetter("agency_id")),
+		return &GTFSRoute{
+			GtfsId:       GTFSRouteID(colGetter("route_id")),
+			GtfsAgencyId: GTFSAgencyID(colGetter("agency_id")),
 			ShortName:    colGetter("route_short_name"),
 			LongName:     colGetter("route_long_name"),
 			RouteType:    routeType,
@@ -194,14 +194,14 @@ func parseRoutes(f *zip.File) ([]GtfsRoute, error) {
 	return routes, err
 }
 
-func parseTrips(f *zip.File) ([]GtfsTrip, error) {
+func parseTrips(f *zip.File) ([]GTFSTrip, error) {
 	println("Parsing trips")
 
-	trips, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsTrip, error) {
-		return &GtfsTrip{
-			GtfsID:        GtfsTripID(colGetter("trip_id")),
-			GtfsRouteID:   GtfsRouteID(colGetter("route_id")),
-			GtfsServiceID: GtfsServiceID(colGetter("service_id")),
+	trips, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSTrip, error) {
+		return &GTFSTrip{
+			GtfsId:        GTFSTripID(colGetter("trip_id")),
+			GtfsRouteId:   GTFSRouteID(colGetter("route_id")),
+			GtfsServiceId: GTFSServiceID(colGetter("service_id")),
 			Headsign:      colGetter("trip_headsign"),
 		}, nil
 	})
@@ -212,10 +212,10 @@ func parseTrips(f *zip.File) ([]GtfsTrip, error) {
 	return trips, err
 }
 
-func parseStops(f *zip.File) ([]GtfsStop, error) {
+func parseStops(f *zip.File) ([]GTFSStop, error) {
 	println("Parsing stops")
 
-	stops, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsStop, error) {
+	stops, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSStop, error) {
 		lat, err := toFloat(colGetter("stop_lat"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse stop_lat: %w", err)
@@ -226,8 +226,8 @@ func parseStops(f *zip.File) ([]GtfsStop, error) {
 			return nil, fmt.Errorf("failed to parse stop_lon: %w", err)
 		}
 
-		return &GtfsStop{
-			GtfsID: GtfsStopID(colGetter("stop_id")),
+		return &GTFSStop{
+			GtfsId: GTFSStopID(colGetter("stop_id")),
 			Name:   colGetter("stop_name"),
 			Lat:    lat,
 			Lon:    lon,
@@ -240,10 +240,10 @@ func parseStops(f *zip.File) ([]GtfsStop, error) {
 	return stops, err
 }
 
-func parseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
+func parseStopTimes(f *zip.File) ([]GTFSStopTime, error) {
 	println("Parsing stop times")
 
-	stopTimes, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsStopTime, error) {
+	stopTimes, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSStopTime, error) {
 		arrivalTime, err := gtfsTimeToSeconds(colGetter("arrival_time"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse arrival_time: %w", err)
@@ -259,9 +259,9 @@ func parseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
 			return nil, fmt.Errorf("failed to parse stop_sequence: %w", err)
 		}
 
-		return &GtfsStopTime{
-			GtfsStopID:    GtfsStopID(colGetter("stop_id")),
-			GtfsTripID:    GtfsTripID(colGetter("trip_id")),
+		return &GTFSStopTime{
+			GtfsStopId:    GTFSStopID(colGetter("stop_id")),
+			GtfsTripId:    GTFSTripID(colGetter("trip_id")),
 			ArrivalTime:   arrivalTime,
 			DepartureTime: departure_time,
 			StopSequence:  stopSequence,
@@ -274,10 +274,10 @@ func parseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
 	return stopTimes, err
 }
 
-func parseTransfers(f *zip.File) ([]GtfsTransfer, error) {
+func parseTransfers(f *zip.File) ([]GTFSTransfer, error) {
 	println("Parsing transfers")
 
-	transfers, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsTransfer, error) {
+	transfers, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSTransfer, error) {
 		transferType, err := toUint(colGetter("transfer_type"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse transfer_type: %w", err)
@@ -288,9 +288,9 @@ func parseTransfers(f *zip.File) ([]GtfsTransfer, error) {
 			return nil, fmt.Errorf("failed to parse min_transfer_time: %w", err)
 		}
 
-		return &GtfsTransfer{
-			FromStopId: GtfsStopID(colGetter("from_stop_id")),
-			ToStopId:   GtfsStopID(colGetter("to_stop_id")),
+		return &GTFSTransfer{
+			FromStopId: GTFSStopID(colGetter("from_stop_id")),
+			ToStopId:   GTFSStopID(colGetter("to_stop_id")),
 
 			TransferType:    transferType,
 			MinTransferTime: minTransferTime,
@@ -303,7 +303,7 @@ func parseTransfers(f *zip.File) ([]GtfsTransfer, error) {
 	return transfers, err
 }
 
-func ParseGtfs(zipFilePath string) (*GtfsTable, error) {
+func ParseGtfs(zipFilePath string) (*GTFSTable, error) {
 	reader, err := zip.OpenReader(zipFilePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
@@ -341,7 +341,7 @@ func ParseGtfs(zipFilePath string) (*GtfsTable, error) {
 		return nil, fmt.Errorf("Failed to parse transfers: %w", err)
 	}
 
-	return &GtfsTable{
+	return &GTFSTable{
 		Routes:    routes,
 		Stops:     stops,
 		Trips:     trips,

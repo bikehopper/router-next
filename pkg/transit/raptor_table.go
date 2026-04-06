@@ -2,14 +2,15 @@ package transit
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"router/pkg/types"
 	"router/pkg/utils"
 )
 
-type RaptorTrip []GtfsStopTime
+type RaptorTrip []GTFSStopTime
 
 type RaptorRoute struct {
 	stopSequence []types.StopID
@@ -33,15 +34,15 @@ type StopRouteSegmentOffsets []uint32 // indexed by types.StopID
 type StopTransferTimes []uint32       // indexed by types.StopID
 
 type RaptorTable struct {
-	Stops  []GtfsStop
-	Routes []GtfsRoute
+	Stops  []GTFSStop
+	Routes []GTFSRoute
 
 	MinTransferTime StopTransferTimes
 
 	StopIdsByRoute     []types.StopID
-	FirstStopIDOfRoute RouteStopOffsets
+	FirstStopIdOfRoute RouteStopOffsets
 
-	TripsByRoute     []GtfsTrip
+	TripsByRoute     []GTFSTrip
 	FirstTripOfRoute RouteTripOffsets
 	NumTripsInRoute  []uint32
 
@@ -56,8 +57,8 @@ func (rt *RaptorTable) NumStops() int  { return len(rt.Stops) }
 func (rt *RaptorTable) NumRoutes() int { return len(rt.NumTripsInRoute) }
 
 func (rt *RaptorTable) StopsForRoute(route types.RouteID) []types.StopID {
-	start := rt.FirstStopIDOfRoute[route]
-	end := rt.FirstStopIDOfRoute[route+1]
+	start := rt.FirstStopIdOfRoute[route]
+	end := rt.FirstStopIdOfRoute[route+1]
 
 	return rt.StopIdsByRoute[start:end]
 }
@@ -74,7 +75,7 @@ func (rt *RaptorTable) StopEventsForTrip(route types.RouteID, trip uint32) []Sto
 	return rt.StopEventsByRoute[tripStart : tripStart+numStops]
 }
 
-func (rt *RaptorTable) TripInRoute(route types.RouteID, trip uint32) GtfsTrip {
+func (rt *RaptorTable) TripInRoute(route types.RouteID, trip uint32) GTFSTrip {
 	routeStart := rt.FirstTripOfRoute[route]
 
 	return rt.TripsByRoute[routeStart+trip]
@@ -87,36 +88,36 @@ func (rt *RaptorTable) RoutesForStop(stop types.StopID) []RouteSegment {
 	return rt.RouteSegmentsByStop[start:end]
 }
 
-// all raptor routes have a parent GTFS route we get name/number from.
-func buildGtfsRouteMap(gtfsRoutes []GtfsRoute) map[GtfsRouteID]*GtfsRoute {
-	gtfsRouteMap := make(map[GtfsRouteID]*GtfsRoute, len(gtfsRoutes))
-	for _, route := range gtfsRoutes {
-		gtfsRouteMap[route.GtfsID] = &route
+func buildGtfsRouteMap(gtfsRoutes []GTFSRoute) map[GTFSRouteID]*GTFSRoute {
+	gtfsRouteMap := make(map[GTFSRouteID]*GTFSRoute, len(gtfsRoutes))
+	for i := range gtfsRoutes {
+		gtfsRouteMap[gtfsRoutes[i].GtfsId] = &gtfsRoutes[i]
 	}
 
 	return gtfsRouteMap
 }
 
-func enumerateGtfsStops(gtfsStops []GtfsStop) map[GtfsStopID]types.StopID {
-	gtfsStopIdMap := make(map[GtfsStopID]types.StopID, len(gtfsStops))
+func enumerateGtfsStops(gtfsStops []GTFSStop) map[GTFSStopID]types.StopID {
+	gtfsStopIdMap := make(map[GTFSStopID]types.StopID, len(gtfsStops))
 	for idx, stop := range gtfsStops {
-		gtfsStopIdMap[stop.GtfsID] = types.StopID(idx)
+		gtfsStopIdMap[stop.GtfsId] = types.StopID(idx)
 	}
 
 	return gtfsStopIdMap
 }
 
-func enumerateGtfsTrips(gtfsTrips []GtfsTrip) map[GtfsTripID]uint32 {
-	gtfsActiveTripIdMap := make(map[GtfsTripID]uint32, len(gtfsTrips))
+// trips are stored per-route and don't get a global ID.
+func enumerateGtfsTrips(gtfsTrips []GTFSTrip) map[GTFSTripID]uint32 {
+	gtfsActiveTripIdMap := make(map[GTFSTripID]uint32, len(gtfsTrips))
 	// TODO: filter by service day
 	for idx, trip := range gtfsTrips {
-		gtfsActiveTripIdMap[trip.GtfsID] = uint32(idx)
+		gtfsActiveTripIdMap[trip.GtfsId] = uint32(idx)
 	}
 
 	return gtfsActiveTripIdMap
 }
 
-func extractSelfTransfers(gtfsTranfers []GtfsTransfer, stopIdMap map[GtfsStopID]types.StopID) StopTransferTimes {
+func extractSelfTransfers(gtfsTranfers []GTFSTransfer, stopIdMap map[GTFSStopID]types.StopID) StopTransferTimes {
 	minTransferTime := make(StopTransferTimes, len(stopIdMap))
 
 	for _, transfer := range gtfsTranfers {
@@ -135,46 +136,43 @@ func extractSelfTransfers(gtfsTranfers []GtfsTransfer, stopIdMap map[GtfsStopID]
 	return minTransferTime
 }
 
-func groupRaptorTrips(gtfsStopTimes []GtfsStopTime, tripIdMap map[GtfsTripID]uint32) []RaptorTrip {
+func groupRaptorTrips(gtfsStopTimes []GTFSStopTime, tripIdMap map[GTFSTripID]uint32) []RaptorTrip {
 	raptorTrips := make([]RaptorTrip, len(tripIdMap))
 
 	for _, stopTime := range gtfsStopTimes {
-		if tripID, ok := tripIdMap[stopTime.GtfsTripID]; ok {
-			raptorTrips[tripID] = append(raptorTrips[tripID], stopTime)
+		if tripId, ok := tripIdMap[stopTime.GtfsTripId]; ok {
+			raptorTrips[tripId] = append(raptorTrips[tripId], stopTime)
 		}
 	}
 
 	for _, trip := range raptorTrips {
-		sort.Slice(trip, func(i int, j int) bool {
-			return trip[i].StopSequence < trip[j].StopSequence
+		slices.SortFunc(trip, func(stopTimeA, stopTimeB GTFSStopTime) int {
+			return int(stopTimeA.StopSequence) - int(stopTimeB.StopSequence)
 		})
 	}
 
 	return raptorTrips
 }
 
-func getStopSequence(trip RaptorTrip, stopIdMap map[GtfsStopID]types.StopID) []types.StopID {
-	stopSequence := make([]types.StopID, len(trip))
-	for i, stopTime := range trip {
-		stopID, ok := stopIdMap[stopTime.GtfsStopID]
+func getStopSequence(trip RaptorTrip, stopIdMap map[GTFSStopID]types.StopID) []types.StopID {
+	return utils.Map(trip, func(stopTime GTFSStopTime) types.StopID {
+		stopId, ok := stopIdMap[stopTime.GtfsStopId]
 		if !ok {
-			fmt.Printf("WARN: unknown stop_id %q\n", stopTime.GtfsStopID)
+			fmt.Printf("WARN: unknown stop_id %q\n", stopTime.GtfsStopId)
 		}
 
-		stopSequence[i] = stopID
-	}
-
-	return stopSequence
+		return stopId
+	})
 }
 
 func buildStopSequenceKey(stopSequence []types.StopID) string {
 	return strings.Join(
-		utils.Map(stopSequence, func(stopID types.StopID) string { return fmt.Sprintf("%d", stopID) }),
+		utils.Map(stopSequence, func(stopId types.StopID) string { return fmt.Sprintf("%d", stopId) }),
 		",",
 	)
 }
 
-func groupTripsByStopSequence(raptorTrips []RaptorTrip, stopIdMap map[GtfsStopID]types.StopID) map[string]*RaptorRoute {
+func groupTripsByStopSequence(raptorTrips []RaptorTrip, stopIdMap map[GTFSStopID]types.StopID) map[string]*RaptorRoute {
 	routeMap := make(map[string]*RaptorRoute)
 
 	for _, trip := range raptorTrips {
@@ -197,72 +195,70 @@ func groupTripsByStopSequence(raptorTrips []RaptorTrip, stopIdMap map[GtfsStopID
 }
 
 func sortRoutes(routeMap map[string]*RaptorRoute) []RaptorRoute {
-	routes := make([]RaptorRoute, 0, len(routeMap))
-	for _, route := range routeMap {
-		routes = append(routes, *route)
+	sortedSequenceKeys := slices.Sorted(maps.Keys(routeMap))
+
+	routes := make([]RaptorRoute, len(routeMap))
+	for i, key := range sortedSequenceKeys {
+		routes[i] = *routeMap[key]
 	}
 
-	sort.Slice(routes, func(i, j int) bool {
-		return buildStopSequenceKey(routes[i].stopSequence) < buildStopSequenceKey(routes[j].stopSequence)
-	})
-
 	for _, route := range routes {
-		sort.Slice(route.trips, func(i, j int) bool {
-			return route.trips[i][0].DepartureTime < route.trips[j][0].DepartureTime
+		slices.SortFunc(route.trips, func(tripA, tripB RaptorTrip) int {
+			return int(tripA[0].DepartureTime) - int(tripB[0].DepartureTime)
 		})
 	}
 
 	return routes
 }
 
-func groupRaptorRoutes(raptorTrips []RaptorTrip, stopIdMap map[GtfsStopID]types.StopID) []RaptorRoute {
+func groupRaptorRoutes(raptorTrips []RaptorTrip, stopIdMap map[GTFSStopID]types.StopID) []RaptorRoute {
 	return sortRoutes(groupTripsByStopSequence(raptorTrips, stopIdMap))
 }
 
 func iterateOverRaptorRoutes(
 	raptorRoutes []RaptorRoute,
-	routeMap map[GtfsRouteID]*GtfsRoute,
-	getTripFromGtfsId func(gtfsTripID GtfsTripID) GtfsTrip,
+	routeMap map[GTFSRouteID]*GTFSRoute,
+	getTripFromGtfsId func(GTFSTripID) GTFSTrip,
 	numStops int,
-) ([]GtfsRoute, []types.StopID, []GtfsTrip, []StopEvent, RouteStopOffsets,
+) ([]GTFSRoute, []types.StopID, []GTFSTrip, []StopEvent, RouteStopOffsets,
 	RouteTripOffsets, []uint32, RouteStopEventOffsets, []uint32) {
 	numRoutes := len(raptorRoutes)
 
-	allRoutes := make([]GtfsRoute, numRoutes)
+	routes := make([]GTFSRoute, numRoutes)
 	firstStopIdOfRoute := make(RouteStopOffsets, numRoutes+1)
 	firstTripOfRoute := make(RouteTripOffsets, numRoutes+1)
 	numTripsInRoute := make([]uint32, numRoutes)
 	firstStopEventOfRoute := make(RouteStopEventOffsets, numRoutes+1)
 	numRoutesForStop := make([]uint32, numStops)
 
-	var allStops []types.StopID
+	var stopIdsByRoute []types.StopID
 
-	var allStopEvents []StopEvent
+	var stopEventsByRoute []StopEvent
 
-	var tripsByRoute []GtfsTrip
+	var tripsByRoute []GTFSTrip
 
 	for routeId, route := range raptorRoutes {
-		firstTripId := route.trips[0][0].GtfsTripID
+		firstTripId := route.trips[0][0].GtfsTripId
 		firstTrip := getTripFromGtfsId(firstTripId)
-		gtfsRoute := *routeMap[firstTrip.GtfsRouteID]
-		allRoutes[routeId] = gtfsRoute
+		gtfsRoute := *routeMap[firstTrip.GtfsRouteId]
+		routes[routeId] = gtfsRoute
 
-		firstStopIdOfRoute[routeId] = uint32(len(allStops))
-		allStops = append(allStops, route.stopSequence...)
+		firstStopIdOfRoute[routeId] = uint32(len(stopIdsByRoute))
+		stopIdsByRoute = append(stopIdsByRoute, route.stopSequence...)
 
 		firstTripOfRoute[routeId] = uint32(len(tripsByRoute))
 		numTripsInRoute[routeId] = uint32(len(route.trips))
 
-		firstStopEventOfRoute[routeId] = uint32(len(allStopEvents))
+		firstStopEventOfRoute[routeId] = uint32(len(stopEventsByRoute))
 
 		for _, trip := range route.trips {
-			gtfsTripId := trip[0].GtfsTripID
+			gtfsTripId := trip[0].GtfsTripId
 			gtfsTrip := getTripFromGtfsId(gtfsTripId)
 
 			tripsByRoute = append(tripsByRoute, gtfsTrip)
 
 			for _, stopTime := range trip {
-				allStopEvents = append(allStopEvents, StopEvent{
+				stopEventsByRoute = append(stopEventsByRoute, StopEvent{
 					ArrivalTime:   stopTime.ArrivalTime,
 					DepartureTime: stopTime.DepartureTime,
 				})
@@ -274,11 +270,11 @@ func iterateOverRaptorRoutes(
 		}
 	}
 
-	firstStopIdOfRoute[numRoutes] = uint32(len(allStops))
+	firstStopIdOfRoute[numRoutes] = uint32(len(stopIdsByRoute))
 	firstTripOfRoute[numRoutes] = uint32(len(tripsByRoute))
-	firstStopEventOfRoute[numRoutes] = uint32(len(allStopEvents))
+	firstStopEventOfRoute[numRoutes] = uint32(len(stopEventsByRoute))
 
-	return allRoutes, allStops, tripsByRoute, allStopEvents, firstStopIdOfRoute,
+	return routes, stopIdsByRoute, tripsByRoute, stopEventsByRoute, firstStopIdOfRoute,
 		firstTripOfRoute, numTripsInRoute, firstStopEventOfRoute, numRoutesForStop
 }
 
@@ -294,14 +290,14 @@ func groupRouteSegments(
 	}
 
 	totalSegments := firstRouteSegmentOfStop[numStops]
-	allRouteSegments := make([]RouteSegment, totalSegments)
+	routeSegmentsByStop := make([]RouteSegment, totalSegments)
 
 	cursor := make(StopRouteSegmentOffsets, numStops)
 	copy(cursor, firstRouteSegmentOfStop[:numStops])
 
 	for routeId, route := range raptorRoutes {
 		for stopIdx, stopId := range route.stopSequence {
-			allRouteSegments[cursor[stopId]] = RouteSegment{
+			routeSegmentsByStop[cursor[stopId]] = RouteSegment{
 				RouteId:   types.RouteID(routeId),
 				StopIndex: uint32(stopIdx),
 			}
@@ -309,10 +305,10 @@ func groupRouteSegments(
 		}
 	}
 
-	return allRouteSegments, firstRouteSegmentOfStop
+	return routeSegmentsByStop, firstRouteSegmentOfStop
 }
 
-func BuildRaptorTable(gtfsTable GtfsTable) (RaptorTable, error) {
+func BuildRaptorTable(gtfsTable GTFSTable) (RaptorTable, error) {
 	println("Building raptor table")
 
 	numStops := len(gtfsTable.Stops)
@@ -321,29 +317,29 @@ func BuildRaptorTable(gtfsTable GtfsTable) (RaptorTable, error) {
 	gtfsActiveTripIdMap := enumerateGtfsTrips(gtfsTable.Trips)
 	selfTransfers := extractSelfTransfers(gtfsTable.Transfers, gtfsStopIdMap)
 
-	getTripFromGtfsId := func(gtfsTripID GtfsTripID) GtfsTrip {
-		return gtfsTable.Trips[gtfsActiveTripIdMap[gtfsTripID]]
+	getTripFromGtfsId := func(gtfsTripId GTFSTripID) GTFSTrip {
+		return gtfsTable.Trips[gtfsActiveTripIdMap[gtfsTripId]]
 	}
 
 	raptorTrips := groupRaptorTrips(gtfsTable.StopTimes, gtfsActiveTripIdMap)
 	raptorRoutes := groupRaptorRoutes(raptorTrips, gtfsStopIdMap)
 
-	allRoutes, allStops, tripsByRoute, allStopEvents, firstStopIdOfRoute,
+	routes, stopIdsByRoute, tripsByRoute, stopEventsByRoute, firstStopIdOfRoute,
 		firstTripOfRoute, numTripsInRoute, firstStopEventOfRoute, numRoutesForStop :=
 		iterateOverRaptorRoutes(raptorRoutes, gtfsRouteMap, getTripFromGtfsId, numStops)
 
-	allRouteSegments, firstRouteSegmentOfStop := groupRouteSegments(raptorRoutes, numRoutesForStop, numStops)
+	routeSegmentsByStop, firstRouteSegmentOfStop := groupRouteSegments(raptorRoutes, numRoutesForStop, numStops)
 
 	return RaptorTable{
 		Stops:                   gtfsTable.Stops,
-		Routes:                  allRoutes,
+		Routes:                  routes,
 		MinTransferTime:         selfTransfers,
-		StopIdsByRoute:          allStops,
-		FirstStopIDOfRoute:      firstStopIdOfRoute,
-		StopEventsByRoute:       allStopEvents,
+		StopIdsByRoute:          stopIdsByRoute,
+		FirstStopIdOfRoute:      firstStopIdOfRoute,
+		StopEventsByRoute:       stopEventsByRoute,
 		FirstStopEventOfRoute:   firstStopEventOfRoute,
 		NumTripsInRoute:         numTripsInRoute,
-		RouteSegmentsByStop:     allRouteSegments,
+		RouteSegmentsByStop:     routeSegmentsByStop,
 		FirstRouteSegmentOfStop: firstRouteSegmentOfStop,
 		TripsByRoute:            tripsByRoute,
 		FirstTripOfRoute:        firstTripOfRoute,
