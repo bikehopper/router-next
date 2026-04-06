@@ -170,7 +170,9 @@ func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 }
 
 func parseRoutes(f *zip.File) ([]GtfsRoute, error) {
-	return parseCSVFile(f, func(colGetter func(string) string) (*GtfsRoute, error) {
+	println("Parsing routes")
+
+	routes, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsRoute, error) {
 		routeType, err := toUint(colGetter(("route_type")))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse route_type: %w", err)
@@ -185,10 +187,17 @@ func parseRoutes(f *zip.File) ([]GtfsRoute, error) {
 			Color:        colGetter("route_color"),
 		}, nil
 	})
+	if err == nil {
+		fmt.Printf("Found %d routes\n", len(routes))
+	}
+
+	return routes, err
 }
 
 func parseTrips(f *zip.File) ([]GtfsTrip, error) {
-	return parseCSVFile(f, func(colGetter func(string) string) (*GtfsTrip, error) {
+	println("Parsing trips")
+
+	trips, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsTrip, error) {
 		return &GtfsTrip{
 			GtfsID:        GtfsTripID(colGetter("trip_id")),
 			GtfsRouteID:   GtfsRouteID(colGetter("route_id")),
@@ -196,10 +205,17 @@ func parseTrips(f *zip.File) ([]GtfsTrip, error) {
 			Headsign:      colGetter("trip_headsign"),
 		}, nil
 	})
+	if err == nil {
+		fmt.Printf("Found %d trips\n", len(trips))
+	}
+
+	return trips, err
 }
 
 func parseStops(f *zip.File) ([]GtfsStop, error) {
-	return parseCSVFile(f, func(colGetter func(string) string) (*GtfsStop, error) {
+	println("Parsing stops")
+
+	stops, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsStop, error) {
 		lat, err := toFloat(colGetter("stop_lat"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse stop_lat: %w", err)
@@ -217,10 +233,17 @@ func parseStops(f *zip.File) ([]GtfsStop, error) {
 			Lon:    lon,
 		}, nil
 	})
+	if err == nil {
+		fmt.Printf("Found %d stops\n", len(stops))
+	}
+
+	return stops, err
 }
 
 func parseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
-	return parseCSVFile(f, func(colGetter func(string) string) (*GtfsStopTime, error) {
+	println("Parsing stop times")
+
+	stopTimes, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsStopTime, error) {
 		arrivalTime, err := gtfsTimeToSeconds(colGetter("arrival_time"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse arrival_time: %w", err)
@@ -244,10 +267,17 @@ func parseStopTimes(f *zip.File) ([]GtfsStopTime, error) {
 			StopSequence:  stopSequence,
 		}, nil
 	})
+	if err == nil {
+		fmt.Printf("Found %d stop times\n", len(stopTimes))
+	}
+
+	return stopTimes, err
 }
 
 func parseTransfers(f *zip.File) ([]GtfsTransfer, error) {
-	return parseCSVFile(f, func(colGetter func(string) string) (*GtfsTransfer, error) {
+	println("Parsing transfers")
+
+	transfers, err := parseCSVFile(f, func(colGetter func(string) string) (*GtfsTransfer, error) {
 		transferType, err := toUint(colGetter("transfer_type"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse transfer_type: %w", err)
@@ -266,6 +296,11 @@ func parseTransfers(f *zip.File) ([]GtfsTransfer, error) {
 			MinTransferTime: minTransferTime,
 		}, nil
 	})
+	if err == nil {
+		fmt.Printf("Found %d transfers\n", len(transfers))
+	}
+
+	return transfers, err
 }
 
 func ParseGtfs(zipFilePath string) (*GtfsTable, error) {
@@ -281,50 +316,30 @@ func ParseGtfs(zipFilePath string) (*GtfsTable, error) {
 		files[file.Name] = file
 	}
 
-	println("Parsing routes")
-
 	routes, err := parseRoutes(files["routes.txt"])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse routes: %w", err)
 	}
-
-	fmt.Printf("Found %d routes\n", len(routes))
-
-	println("Parsing trips")
 
 	trips, err := parseTrips(files["trips.txt"])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse trips: %w", err)
 	}
 
-	fmt.Printf("Found %d trips\n", len(trips))
-
-	println("Parsing stops")
-
 	stops, err := parseStops(files["stops.txt"])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse stops: %w", err)
 	}
-
-	fmt.Printf("Found %d stops\n", len(stops))
-
-	println("Parsing stop times")
 
 	stopTimes, err := parseStopTimes(files["stop_times.txt"])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse stop times: %w", err)
 	}
 
-	fmt.Printf("Found %d stop times\n", len(stopTimes))
-
-	println("Parsing transfers")
-
 	transfers, err := parseTransfers(files["transfers.txt"])
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse transfers: %w", err)
 	}
-
-	fmt.Printf("Found %d transfers\n", len(transfers))
 
 	return &GtfsTable{
 		Routes:    routes,
