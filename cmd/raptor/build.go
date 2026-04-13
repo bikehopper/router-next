@@ -5,21 +5,22 @@ import (
 	"os"
 	"time"
 
-	"router/pkg/transit"
+	"router/pkg/gtfs"
+	"router/pkg/raptor"
 )
 
 func main() {
-	gtfsTable, err := transit.ParseGtfs(os.Args[1])
+	gtfsTable, err := gtfs.ParseGtfs(os.Args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
 
-	rt, err := transit.BuildRaptorTable(*gtfsTable, transit.ToGTFSDate(time.Now()))
+	raptorTable, err := raptor.BuildRaptorTable(gtfsTable, gtfs.TimeToGTFSDate(time.Now()))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Total size: %.2fMB\n", float64(rt.Sizeof())/1024/1024)
+	fmt.Printf("Total size: %.2fMB\n", float64(raptorTable.Sizeof())/1024/1024)
 }
