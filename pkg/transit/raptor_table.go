@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -98,6 +99,25 @@ func (rt *RaptorTable) RoutesForStop(stop types.StopID) []RouteSegment {
 	end := rt.FirstRouteSegmentOfStop[stop+1]
 
 	return rt.RouteSegmentsByStop[start:end]
+}
+
+func (rt *RaptorTable) Sizeof() int {
+	sizeStops := rt.NumStops() * int(reflect.TypeFor[GTFSStop]().Size())
+	sizeRoutes := rt.NumRoutes() * int(reflect.TypeFor[GTFSRoute]().Size())
+
+	sizeTranfers := len(rt.MinTransferTime) * 4
+
+	sizeStopIds := (len(rt.StopIdsByRoute) + rt.NumStops()) * 4
+
+	sizeTrips := len(rt.TripsByRoute)*int(reflect.TypeFor[GTFSTrip]().Size()) + 2*rt.NumRoutes()*4
+
+	sizeStopEvents := len(rt.StopEventsByRoute)*int(reflect.TypeFor[StopEvent]().Size()) + rt.NumRoutes()*4
+
+	sizeRouteSegments := len(rt.RouteSegmentsByStop)*int(reflect.TypeFor[RouteSegment]().Size()) + rt.NumStops()*4
+
+	totalBytes := sizeStops + sizeRoutes + sizeTranfers + sizeStopIds + sizeTrips + sizeStopEvents + sizeRouteSegments
+
+	return totalBytes
 }
 
 func buildGtfsRouteMap(gtfsRoutes []GTFSRoute) map[GTFSRouteID]*GTFSRoute {

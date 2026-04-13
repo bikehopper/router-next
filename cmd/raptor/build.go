@@ -21,4 +21,5 @@ func main() {
 	}
 
 	fmt.Printf("Extracted %d routes\n", rt.NumRoutes())
+	fmt.Printf("Total size: %.2fMB\n", float64(rt.Sizeof())/1024/1024)
 }
