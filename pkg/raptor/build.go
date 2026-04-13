@@ -49,7 +49,7 @@ func BuildRaptorTable(gtfsTable *gtfs.GTFSTable, date gtfs.GTFSDate) (*RaptorTab
 		FirstTripOfRoute:        firstTripOfRoute,
 	}
 
-	fmt.Printf("RAPTOR table built in %s\n", time.Since(start).String())
+	fmt.Printf("RAPTOR table built in %s\n", time.Since(start))
 
 	return &table, nil
 }
