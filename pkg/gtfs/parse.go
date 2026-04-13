@@ -13,6 +13,10 @@ import (
 )
 
 func ParseGtfs(zipFilePath string) (*GTFSTable, error) {
+	start := time.Now()
+
+	println("Parsing GTFS")
+
 	reader, err := zip.OpenReader(zipFilePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
@@ -25,42 +29,15 @@ func ParseGtfs(zipFilePath string) (*GTFSTable, error) {
 		files[file.Name] = file
 	}
 
-	routes, err := parseRoutes(files["routes.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse routes: %w", err)
-	}
+	routes, _ := parseRoutes(files["routes.txt"])
+	trips, _ := parseTrips(files["trips.txt"])
+	services, _ := parseCalendar(files["calendar.txt"])
+	serviceExceptions, _ := parseCalendarDates(files["calendar_dates.txt"])
+	stops, _ := parseStops(files["stops.txt"])
+	stopTimes, _ := parseStopTimes(files["stop_times.txt"])
+	transfers, _ := parseTransfers(files["transfers.txt"])
 
-	trips, err := parseTrips(files["trips.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse trips: %w", err)
-	}
-
-	services, err := parseCalendar(files["calendar.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse calendar: %w", err)
-	}
-
-	serviceExceptions, err := parseCalendarDates(files["calendar_dates.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse calendar dates: %w", err)
-	}
-
-	stops, err := parseStops(files["stops.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse stops: %w", err)
-	}
-
-	stopTimes, err := parseStopTimes(files["stop_times.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse stop times: %w", err)
-	}
-
-	transfers, err := parseTransfers(files["transfers.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse transfers: %w", err)
-	}
-
-	return &GTFSTable{
+	table := GTFSTable{
 		routes:            routes,
 		Stops:             stops,
 		Trips:             trips,
@@ -72,7 +49,11 @@ func ParseGtfs(zipFilePath string) (*GTFSTable, error) {
 		RoutesById:                  routesById(routes),
 		servicesById:                servicesById(services),
 		serviceExceptionsByDateById: serviceExceptionsByDateById(serviceExceptions),
-	}, nil
+	}
+
+	fmt.Printf("GTFS parsing done in %s\n", time.Since(start).String())
+
+	return &table, nil
 }
 
 type RowParser[T any] func(colGetter func(string) string) (*T, error)
@@ -138,8 +119,6 @@ func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 }
 
 func parseRoutes(f *zip.File) ([]GTFSRoute, error) {
-	println("Parsing routes")
-
 	routes, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSRoute, error) {
 		routeType, err := parseUint32(colGetter(("route_type")))
 		if err != nil {
@@ -163,8 +142,6 @@ func parseRoutes(f *zip.File) ([]GTFSRoute, error) {
 }
 
 func parseTrips(f *zip.File) ([]GTFSTrip, error) {
-	println("Parsing trips")
-
 	trips, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSTrip, error) {
 		return &GTFSTrip{
 			GtfsId:        GTFSTripID(colGetter("trip_id")),
@@ -181,8 +158,6 @@ func parseTrips(f *zip.File) ([]GTFSTrip, error) {
 }
 
 func parseCalendar(f *zip.File) ([]GTFSService, error) {
-	println("Parsing calendar")
-
 	services, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSService, error) {
 		activeOnDay := make([]bool, 7)
 		activeOnDay[time.Monday] = parseBool(colGetter("monday"))
@@ -208,8 +183,6 @@ func parseCalendar(f *zip.File) ([]GTFSService, error) {
 }
 
 func parseCalendarDates(f *zip.File) ([]GTFSServiceException, error) {
-	println("Parsing calendar dates")
-
 	serviceExceptions, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSServiceException, error) {
 		exceptionType, err := strconv.Atoi(colGetter("exception_type"))
 		if err != nil {
@@ -230,8 +203,6 @@ func parseCalendarDates(f *zip.File) ([]GTFSServiceException, error) {
 }
 
 func parseStops(f *zip.File) ([]GTFSStop, error) {
-	println("Parsing stops")
-
 	stops, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSStop, error) {
 		lat, err := parseFloat64(colGetter("stop_lat"))
 		if err != nil {
