@@ -102,6 +102,8 @@ func (rt *RaptorTable) RoutesForStop(stop types.StopID) []RouteSegment {
 }
 
 func (rt *RaptorTable) Sizeof() int {
+	sizeTable := int(reflect.TypeFor[RaptorTable]().Size())
+
 	sizeStops := rt.NumStops() * int(reflect.TypeFor[GTFSStop]().Size())
 	sizeRoutes := rt.NumRoutes() * int(reflect.TypeFor[GTFSRoute]().Size())
 
@@ -115,18 +117,11 @@ func (rt *RaptorTable) Sizeof() int {
 
 	sizeRouteSegments := len(rt.RouteSegmentsByStop)*int(reflect.TypeFor[RouteSegment]().Size()) + rt.NumStops()*4
 
-	totalBytes := sizeStops + sizeRoutes + sizeTranfers + sizeStopIds + sizeTrips + sizeStopEvents + sizeRouteSegments
+	totalBytes :=
+		sizeTable + sizeStops + sizeRoutes + sizeTranfers + sizeStopIds +
+			sizeTrips + sizeStopEvents + sizeRouteSegments
 
 	return totalBytes
-}
-
-func buildGtfsRouteMap(gtfsRoutes []GTFSRoute) map[GTFSRouteID]*GTFSRoute {
-	gtfsRouteMap := make(map[GTFSRouteID]*GTFSRoute, len(gtfsRoutes))
-	for i := range gtfsRoutes {
-		gtfsRouteMap[gtfsRoutes[i].GtfsId] = &gtfsRoutes[i]
-	}
-
-	return gtfsRouteMap
 }
 
 func enumerateGtfsStops(gtfsStops []GTFSStop) map[GTFSStopID]types.StopID {
@@ -140,7 +135,7 @@ func enumerateGtfsStops(gtfsStops []GTFSStop) map[GTFSStopID]types.StopID {
 
 func enumerateGtfsTrips(gtfsTrips []GTFSTrip) map[GTFSTripID]RaptorTripID {
 	gtfsActiveTripIdMap := make(map[GTFSTripID]RaptorTripID, len(gtfsTrips))
-	// TODO: filter by service day
+
 	for idx, trip := range gtfsTrips {
 		gtfsActiveTripIdMap[trip.GtfsId] = RaptorTripID(idx)
 	}
@@ -231,6 +226,8 @@ func groupTripsByStopSequence(raptorTrips []RaptorTrip) map[string]*RaptorRoute 
 			route.trips = append(route.trips, trip)
 		}
 	}
+
+	fmt.Printf("Extracted %d raptor routes\n", len(routeMap))
 
 	return routeMap
 }
@@ -347,14 +344,15 @@ func groupRouteSegments(
 	return routeSegmentsByStop, firstRouteSegmentOfStop
 }
 
-func BuildRaptorTable(gtfsTable GTFSTable) (RaptorTable, error) {
+func BuildRaptorTable(gtfsTable GTFSTable, date GTFSDate) (RaptorTable, error) {
 	println("Building raptor table")
 
-	gtfsRouteMap := buildGtfsRouteMap(gtfsTable.Routes)
+	gtfsRouteMap := gtfsTable.RoutesById()
 	gtfsStopIdMap := enumerateGtfsStops(gtfsTable.Stops)
 	numStops := len(gtfsTable.Stops)
-	gtfsActiveTripIdMap := enumerateGtfsTrips(gtfsTable.Trips)
 	selfTransfers := extractSelfTransfers(gtfsTable.Transfers, gtfsStopIdMap)
+
+	gtfsActiveTripIdMap := enumerateGtfsTrips(gtfsTable.TripsForDate(date))
 
 	raptorTrips := groupRaptorTrips(gtfsTable.StopTimes, gtfsStopIdMap, gtfsActiveTripIdMap)
 	raptorRoutes := groupRaptorRoutes(raptorTrips)
