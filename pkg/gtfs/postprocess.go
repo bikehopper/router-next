@@ -1,35 +1,40 @@
 package gtfs
 
-func routesById(routes []GTFSRoute) map[GTFSRouteID]*GTFSRoute {
-	gtfsRouteMap := make(map[GTFSRouteID]*GTFSRoute, len(routes))
-	for i := range routes {
-		gtfsRouteMap[routes[i].GtfsId] = &routes[i]
-	}
+import (
+	"router/pkg/storage"
 
-	return gtfsRouteMap
+	"github.com/cockroachdb/pebble"
+)
+
+func GetRoute(db *pebble.DB, id GTFSRouteID) (*GTFSRoute, error) {
+	var route GTFSRoute
+	err := storage.GetJSON(db, "route:", string(id), &route)
+	return &route, err
 }
 
-func servicesById(services []GTFSService) map[GTFSServiceID]*GTFSService {
-	gtfsServiceMap := make(map[GTFSServiceID]*GTFSService, len(services))
-	for i := range services {
-		gtfsServiceMap[services[i].GtfsId] = &services[i]
-	}
-
-	return gtfsServiceMap
+func GetService(db *pebble.DB, id GTFSServiceID) (*GTFSService, error) {
+	var service GTFSService
+	err := storage.GetJSON(db, "service:", string(id), &service)
+	return &service, err
 }
 
-func serviceExceptionsByDateById(
-	serviceExceptions []GTFSServiceException,
-) map[GTFSServiceID]map[GTFSDate]GTFSServiceExceptionType {
-	gtfsServiceExceptionMap := make(map[GTFSServiceID]map[GTFSDate]GTFSServiceExceptionType, len(serviceExceptions))
-	for _, serviceException := range serviceExceptions {
-		_, ok := gtfsServiceExceptionMap[serviceException.GtfsServiceId]
-		if !ok {
-			gtfsServiceExceptionMap[serviceException.GtfsServiceId] = make(map[GTFSDate]GTFSServiceExceptionType)
-		}
+func GetServiceException(db *pebble.DB, serviceId GTFSServiceID, date GTFSDate) (*GTFSServiceException, error) {
+	var exception GTFSServiceException
+	id := string(serviceId) + ":" + string(date)
+	err := storage.GetJSON(db, "service_exception:", id, &exception)
+	return &exception, err
+}
 
-		gtfsServiceExceptionMap[serviceException.GtfsServiceId][serviceException.Date] = serviceException.ExceptionType
+// replaces iterating over maps[serviceID] for values
+// caller MUST invoke iter.Close() when finished
+func GetServiceExceptionsIterator(db *pebble.DB, serviceId GTFSServiceID) (*pebble.Iterator, []byte, error) {
+	prefix := []byte("service_exception:" + string(serviceId) + ":")
+
+	iter, err := db.NewIter(nil)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return gtfsServiceExceptionMap
+	iter.SeekGE(prefix)
+	return iter, prefix, nil
 }
