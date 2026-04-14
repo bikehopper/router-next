@@ -7,12 +7,16 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
+	"router/pkg/storage"
 	"router/pkg/types"
+
+	"github.com/cockroachdb/pebble"
 )
 
-func ParseGtfs(zipFilePath string) (*GTFSTable, error) {
+func ParseGtfs(zipFilePath string, db *pebble.DB) (*GTFSTable, error) {
 	reader, err := zip.OpenReader(zipFilePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
@@ -25,66 +29,48 @@ func ParseGtfs(zipFilePath string) (*GTFSTable, error) {
 		files[file.Name] = file
 	}
 
-	routes, err := parseRoutes(files["routes.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse routes: %w", err)
+	var wg sync.WaitGroup
+	errChan := make(chan error, 7)
+
+	runParseTask(&wg, errChan, "routes", db, files["routes.txt"], parseRoutes)
+	runParseTask(&wg, errChan, "trips", db, files["trips.txt"], parseTrips)
+	runParseTask(&wg, errChan, "calendar", db, files["calendar.txt"], parseCalendar)
+	runParseTask(&wg, errChan, "calendar_dates", db, files["calendar_dates.txt"], parseCalendarDates)
+	runParseTask(&wg, errChan, "stops", db, files["stops.txt"], parseStops)
+	runParseTask(&wg, errChan, "stop_times", db, files["stop_times.txt"], parseStopTimes)
+	runParseTask(&wg, errChan, "transfers", db, files["transfers.txt"], parseTransfers)
+
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
+		return nil, err
 	}
 
-	trips, err := parseTrips(files["trips.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse trips: %w", err)
-	}
+	// Returning empty GTFSTable per phase 1 plan, so consuming callers don't panic on nil.
+	return &GTFSTable{}, nil
+}
 
-	services, err := parseCalendar(files["calendar.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse calendar: %w", err)
-	}
-
-	serviceExceptions, err := parseCalendarDates(files["calendar_dates.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse calendar dates: %w", err)
-	}
-
-	stops, err := parseStops(files["stops.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse stops: %w", err)
-	}
-
-	stopTimes, err := parseStopTimes(files["stop_times.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse stop times: %w", err)
-	}
-
-	transfers, err := parseTransfers(files["transfers.txt"])
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse transfers: %w", err)
-	}
-
-	return &GTFSTable{
-		routes:            routes,
-		Stops:             stops,
-		Trips:             trips,
-		Services:          services,
-		ServiceExceptions: serviceExceptions,
-		StopTimes:         stopTimes,
-		Transfers:         transfers,
-
-		RoutesById:                  routesById(routes),
-		servicesById:                servicesById(services),
-		serviceExceptionsByDateById: serviceExceptionsByDateById(serviceExceptions),
-	}, nil
+func runParseTask(wg *sync.WaitGroup, errChan chan<- error, prefix string, db *pebble.DB, file *zip.File, task func(*zip.File, *pebble.DB) error) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := task(file, db); err != nil {
+			errChan <- fmt.Errorf("%s: %w", prefix, err)
+		}
+	}()
 }
 
 type RowParser[T any] func(colGetter func(string) string) (*T, error)
 
-func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
+func parseCSVFile[T any](f *zip.File, parser RowParser[T], processor func(T) error) error {
 	if f == nil {
-		return nil, nil
+		return nil
 	}
 
 	rc, err := f.Open()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open %s: %w", f.Name, err)
+		return fmt.Errorf("failed to open %s: %w", f.Name, err)
 	}
 	defer rc.Close()
 
@@ -92,7 +78,7 @@ func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 
 	header, err := reader.Read()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read header %s: %w", f.Name, err)
+		return fmt.Errorf("failed to read header %s: %w", f.Name, err)
 	}
 
 	colIdx := make(map[string]int, len(header))
@@ -106,41 +92,39 @@ func parseCSVFile[T any](f *zip.File, parser RowParser[T]) ([]T, error) {
 			if ok {
 				return row[i]
 			}
-
 			return ""
 		}
 	}
-
-	var results []T
 
 	for {
 		row, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
-
 		if err != nil {
-			return nil, fmt.Errorf("failed to read row %s: %w", f.Name, err)
+			return fmt.Errorf("failed to read row %s: %w", f.Name, err)
 		}
 
 		colGetter := buildColGetter(row)
-
 		parsedValue, err := parser(colGetter)
 		if err != nil {
 			// TODO: handle rows that don't parse properly
 			continue
 		}
 
-		results = append(results, *parsedValue)
+		if err := processor(*parsedValue); err != nil {
+			return fmt.Errorf("failed to process row: %w", err)
+		}
 	}
 
-	return results, nil
+	return nil
 }
 
-func parseRoutes(f *zip.File) ([]GTFSRoute, error) {
+func parseRoutes(f *zip.File, db *pebble.DB) error {
 	println("Parsing routes")
+	count := 0
 
-	routes, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSRoute, error) {
+	err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSRoute, error) {
 		routeType, err := parseUint32(colGetter(("route_type")))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse route_type: %w", err)
@@ -154,36 +138,44 @@ func parseRoutes(f *zip.File) ([]GTFSRoute, error) {
 			RouteType:    routeType,
 			Color:        colGetter("route_color"),
 		}, nil
+	}, func(route GTFSRoute) error {
+		count++
+		return storage.PutJSON(db, "route:", string(route.GtfsId), route)
 	})
-	if err == nil {
-		fmt.Printf("Found %d routes\n", len(routes))
-	}
 
-	return routes, err
+	if err == nil {
+		fmt.Printf("Parsed %d routes\n", count)
+	}
+	return err
 }
 
-func parseTrips(f *zip.File) ([]GTFSTrip, error) {
+func parseTrips(f *zip.File, db *pebble.DB) error {
 	println("Parsing trips")
+	count := 0
 
-	trips, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSTrip, error) {
+	err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSTrip, error) {
 		return &GTFSTrip{
 			GtfsId:        GTFSTripID(colGetter("trip_id")),
 			GtfsRouteId:   GTFSRouteID(colGetter("route_id")),
 			GtfsServiceId: GTFSServiceID(colGetter("service_id")),
 			Headsign:      colGetter("trip_headsign"),
 		}, nil
+	}, func(trip GTFSTrip) error {
+		count++
+		return storage.PutJSON(db, "trip:", string(trip.GtfsId), trip)
 	})
-	if err == nil {
-		fmt.Printf("Found %d trips\n", len(trips))
-	}
 
-	return trips, err
+	if err == nil {
+		fmt.Printf("Parsed %d trips\n", count)
+	}
+	return err
 }
 
-func parseCalendar(f *zip.File) ([]GTFSService, error) {
+func parseCalendar(f *zip.File, db *pebble.DB) error {
 	println("Parsing calendar")
+	count := 0
 
-	services, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSService, error) {
+	err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSService, error) {
 		activeOnDay := make([]bool, 7)
 		activeOnDay[time.Monday] = parseBool(colGetter("monday"))
 		activeOnDay[time.Tuesday] = parseBool(colGetter("tuesday"))
@@ -199,18 +191,22 @@ func parseCalendar(f *zip.File) ([]GTFSService, error) {
 			StartDate:   GTFSDate(colGetter("start_date")),
 			EndDate:     GTFSDate(colGetter("end_date")),
 		}, nil
+	}, func(service GTFSService) error {
+		count++
+		return storage.PutJSON(db, "service:", string(service.GtfsId), service)
 	})
-	if err == nil {
-		fmt.Printf("Found %d services\n", len(services))
-	}
 
-	return services, err
+	if err == nil {
+		fmt.Printf("Parsed %d services\n", count)
+	}
+	return err
 }
 
-func parseCalendarDates(f *zip.File) ([]GTFSServiceException, error) {
+func parseCalendarDates(f *zip.File, db *pebble.DB) error {
 	println("Parsing calendar dates")
+	count := 0
 
-	serviceExceptions, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSServiceException, error) {
+	err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSServiceException, error) {
 		exceptionType, err := strconv.Atoi(colGetter("exception_type"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse exception_type: %w", err)
@@ -221,18 +217,23 @@ func parseCalendarDates(f *zip.File) ([]GTFSServiceException, error) {
 			Date:          GTFSDate(colGetter("date")),
 			ExceptionType: GTFSServiceExceptionType(exceptionType),
 		}, nil
+	}, func(exception GTFSServiceException) error {
+		count++
+		id := string(exception.GtfsServiceId) + ":" + string(exception.Date)
+		return storage.PutJSON(db, "service_exception:", id, exception)
 	})
-	if err == nil {
-		fmt.Printf("Found %d service exceptions\n", len(serviceExceptions))
-	}
 
-	return serviceExceptions, err
+	if err == nil {
+		fmt.Printf("Parsed %d service exceptions\n", count)
+	}
+	return err
 }
 
-func parseStops(f *zip.File) ([]GTFSStop, error) {
+func parseStops(f *zip.File, db *pebble.DB) error {
 	println("Parsing stops")
+	count := 0
 
-	stops, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSStop, error) {
+	err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSStop, error) {
 		lat, err := parseFloat64(colGetter("stop_lat"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse stop_lat: %w", err)
@@ -249,18 +250,22 @@ func parseStops(f *zip.File) ([]GTFSStop, error) {
 			Lat:    lat,
 			Lon:    lon,
 		}, nil
+	}, func(stop GTFSStop) error {
+		count++
+		return storage.PutJSON(db, "stop:", string(stop.GtfsId), stop)
 	})
-	if err == nil {
-		fmt.Printf("Found %d stops\n", len(stops))
-	}
 
-	return stops, err
+	if err == nil {
+		fmt.Printf("Parsed %d stops\n", count)
+	}
+	return err
 }
 
-func parseStopTimes(f *zip.File) ([]GTFSStopTime, error) {
+func parseStopTimes(f *zip.File, db *pebble.DB) error {
 	println("Parsing stop times")
+	count := 0
 
-	stopTimes, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSStopTime, error) {
+	err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSStopTime, error) {
 		arrivalTime, err := gtfsTimeToSeconds(colGetter("arrival_time"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse arrival_time: %w", err)
@@ -283,18 +288,23 @@ func parseStopTimes(f *zip.File) ([]GTFSStopTime, error) {
 			DepartureTime: types.Timestamp(departureTime),
 			StopSequence:  stopSequence,
 		}, nil
+	}, func(stopTime GTFSStopTime) error {
+		count++
+		id := string(stopTime.GtfsTripId) + ":" + fmt.Sprint(stopTime.StopSequence)
+		return storage.PutJSON(db, "stop_time:", id, stopTime)
 	})
-	if err == nil {
-		fmt.Printf("Found %d stop times\n", len(stopTimes))
-	}
 
-	return stopTimes, err
+	if err == nil {
+		fmt.Printf("Parsed %d stop times\n", count)
+	}
+	return err
 }
 
-func parseTransfers(f *zip.File) ([]GTFSTransfer, error) {
+func parseTransfers(f *zip.File, db *pebble.DB) error {
 	println("Parsing transfers")
+	count := 0
 
-	transfers, err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSTransfer, error) {
+	err := parseCSVFile(f, func(colGetter func(string) string) (*GTFSTransfer, error) {
 		transferType, err := parseUint32(colGetter("transfer_type"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse transfer_type: %w", err)
@@ -312,10 +322,14 @@ func parseTransfers(f *zip.File) ([]GTFSTransfer, error) {
 			TransferType:    transferType,
 			MinTransferTime: minTransferTime,
 		}, nil
+	}, func(transfer GTFSTransfer) error {
+		count++
+		id := string(transfer.FromStopId) + ":" + string(transfer.ToStopId)
+		return storage.PutJSON(db, "transfer:", id, transfer)
 	})
-	if err == nil {
-		fmt.Printf("Found %d transfers\n", len(transfers))
-	}
 
-	return transfers, err
+	if err == nil {
+		fmt.Printf("Parsed %d transfers\n", count)
+	}
+	return err
 }
