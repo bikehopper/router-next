@@ -6,14 +6,36 @@
 </head>
 
 <body>
-    <div id='map' style='width: 850px; height: 700px;'></div>
+    <div style="display:flex;">
+        <div id='map' style='width: 850px; height: 700px;'></div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <label style="display:flex;flex-direction:column;">
+                <span>Start Stop Id</span>
+                <input id="start" placeholder="15279" />
+            </label>
+            <label style="display:flex;flex-direction:column;">
+                <span>End Stop Id</span>
+                <input id="end" placeholder="54788" />
+            </label>
+            <button id="route" onclick="route()">Route</button>
+        </div>
+    </div>
+
     <script>
-        var map = new maplibregl.Map({
+        const map = new maplibregl.Map({
             container: 'map',
             style: 'https://tiles.openfreemap.org/styles/bright', // stylesheet location
             center: [-122.447890, 37.762667], // starting position [lng, lat]
             zoom: 12 // starting zoom
         });
+
+        async function route() {
+            const start = document.getElementById('start').value;
+            const end = document.getElementById('end').value;
+            const response = await fetch(`http://localhost:3456/route?from=${start}&to=${end}`);
+            const newRoute = await response.json();
+            console.log(newRoute);
+        }
     </script>
 </body>
 
