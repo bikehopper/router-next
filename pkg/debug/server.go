@@ -6,10 +6,20 @@ import (
 )
 
 func StartServer(port string) {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
-	})
+	// Serve Static Files
+	fs := http.FileServer(http.Dir("./static"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	fmt.Println("Server running on port", port)
-	http.ListenAndServe(":"+port, nil)
+	// Serve Index
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.ServeFile(w, r, "static/index.html")
+			return
+		}
+		fs.ServeHTTP(w, r)
+	})
+	fmt.Printf("Starting server on port %s \n", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		fmt.Printf("Server failed: %v\n", err)
+	}
 }
