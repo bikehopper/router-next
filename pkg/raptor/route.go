@@ -78,7 +78,7 @@ func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime typ
 
 				if currentTripIdx >= 0 {
 					arrivalTime := rt.StopEventsForTrip(routeId, uint32(currentTripIdx))[currStopIdx].ArrivalTime
-					if arrivalTime < rounds[round][currStopId] {
+					if arrivalTime < rounds[round][currStopId] && arrivalTime < best[end] {
 						rounds[round][currStopId] = arrivalTime
 
 						parents[round][currStopId] = Label{
@@ -128,10 +128,6 @@ func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime typ
 	var pareto []Journey
 
 	for round := 1; round <= MAX_ROUNDS; round++ {
-		if round == 0 {
-			continue
-		}
-
 		if rounds[round][end] < rounds[round-1][end] {
 			pareto = append(pareto, Journey{
 				NumLegs:     round,
