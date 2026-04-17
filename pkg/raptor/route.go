@@ -1,59 +1,90 @@
 package raptor
 
-import "router/pkg/types"
+import (
+	"router/pkg/types"
+	"slices"
+)
 
-type RouteLeg struct {
-	routeId      types.RouteID
-	tripIdx      uint32
-	startStopIdx uint32
-	endStopIdx   uint32
+type Label struct {
+	RouteId       types.RouteID
+	TripIdx       uint32
+	BoardStopId   types.StopID
+	BoardStopIdx  StopIndex
+	AlightStopIdx StopIndex
 }
 
-type Journey struct {
-	arrivalTime types.Timestamp
-	legs        []RouteLeg
-}
+const MAX_ROUNDS = 10
 
-func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime types.Timestamp) {
-	currentBest := make([]Journey, rt.NumStops())
+func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime types.Timestamp) []Label {
+	parent := make([]Label, rt.NumStops())
 
-	var round = 0
+	best := make([]types.Timestamp, rt.NumStops())
+	for i := range best {
+		best[i] = types.INFINITY
+	}
 
-	var stopsToConsider = []types.StopID{start}
+	best[start] = startTime
 
-	for {
-		var nextStopsToConsider []types.StopID
+	var prevBest []types.Timestamp
 
-		for _, stopId := range stopsToConsider {
-			currentJourney := currentBest[stopId]
-			routesForStop := rt.RoutesForStop(stopId)
+	stopsUpdated := []types.StopID{start}
 
-			for _, routeSegment := range routesForStop {
-				routeId := routeSegment.RouteId
-				startStopIdx := routeSegment.StopIndex
+	for len(stopsUpdated) > 0 {
+		prevBest = make([]types.Timestamp, rt.NumStops())
+		copy(prevBest, best)
 
-				stopsForRoute := rt.StopsForRoute(routeId)
-				for tripIdx := range rt.NumTripsInRoute[routeId] {
-					stopEvents := rt.StopEventsForTrip(routeId, tripIdx)
-					if stopEvents[startStopIdx].DepartureTime > currentJourney.arrivalTime {
-						for endStopIdx := startStopIdx; endStopIdx < uint32(len(stopEvents)); endStopIdx++ {
-							stopEvent := stopEvents[endStopIdx]
+		routeEarliestStop := make(map[types.RouteID]StopIndex)
 
-							stopId := stopsForRoute[endStopIdx]
-							if stopEvent.ArrivalTime < currentBest[stopId].arrivalTime {
-								currentBest[stopId] = Journey{
-									arrivalTime: stopEvent.ArrivalTime,
-									legs: append(
-										currentJourney.legs,
-										RouteLeg{
-											routeId:      routeId,
-											tripIdx:      tripIdx,
-											startStopIdx: startStopIdx,
-											endStopIdx:   endStopIdx,
-										},
-									)}
-								nextStopsToConsider = append(nextStopsToConsider, stopId)
-							}
+		for _, stopId := range stopsUpdated {
+			for _, segment := range rt.RoutesForStop(stopId) {
+				if existing, ok := routeEarliestStop[segment.RouteId]; !ok || segment.StopIndex < existing {
+					routeEarliestStop[segment.RouteId] = segment.StopIndex
+				}
+			}
+		}
+
+		var nextStopsUpdated []types.StopID
+
+		for routeId, firstStopIdx := range routeEarliestStop {
+			stopsForRoute := rt.StopsForRoute(routeId)
+
+			currentTripIdx := -1
+			boardStopId := types.StopID(0)
+			boardStopIdx := uint32(0)
+
+			for currStopIdx := int(firstStopIdx); currStopIdx < len(stopsForRoute); currStopIdx++ {
+				currStopId := stopsForRoute[currStopIdx]
+
+				if currentTripIdx >= 0 {
+					events := rt.StopEventsForTrip(routeId, uint32(currentTripIdx))
+					if events[currStopIdx].ArrivalTime < best[currStopId] {
+						best[currStopId] = events[currStopIdx].ArrivalTime
+						parent[currStopId] = Label{
+							RouteId:       routeId,
+							TripIdx:       uint32(currentTripIdx),
+							BoardStopId:   boardStopId,
+							BoardStopIdx:  StopIndex(boardStopIdx),
+							AlightStopIdx: StopIndex(currStopIdx),
+						}
+						nextStopsUpdated = append(nextStopsUpdated, currStopId)
+					}
+				}
+
+				prevArrival := prevBest[currStopId]
+				if prevArrival == types.INFINITY {
+					continue
+				}
+
+				earliestBoard := prevArrival + types.Timestamp(rt.MinTransferTime[currStopId])
+
+				numTrips := rt.NumTripsInRoute[routeId]
+				for potentialTripIdx := range numTrips {
+					stopEvents := rt.StopEventsForTrip(routeId, potentialTripIdx)
+					if stopEvents[currStopIdx].DepartureTime >= earliestBoard {
+						if currentTripIdx < 0 || potentialTripIdx < uint32(currentTripIdx) {
+							currentTripIdx = int(potentialTripIdx)
+							boardStopId = currStopId
+							boardStopIdx = uint32(currStopIdx)
 						}
 
 						break
@@ -62,7 +93,22 @@ func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime typ
 			}
 		}
 
-		stopsToConsider = nextStopsToConsider
-		round++
+		stopsUpdated = nextStopsUpdated
 	}
+
+	if best[end] == types.INFINITY {
+		return nil
+	}
+
+	var legs []Label
+
+	for stop := end; stop != start; {
+		label := parent[stop]
+		legs = append(legs, label)
+		stop = label.BoardStopId
+	}
+
+	slices.Reverse(legs)
+
+	return legs
 }
