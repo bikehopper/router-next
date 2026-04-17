@@ -47,7 +47,7 @@ func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime typ
 
 	stopsUpdated := []types.StopID{start}
 
-	for round := range MAX_ROUNDS {
+	for round := 1; round <= MAX_ROUNDS; round++ {
 		if len(stopsUpdated) == 0 {
 			break
 		}
@@ -127,12 +127,12 @@ func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime typ
 
 	var pareto []Journey
 
-	for round := range MAX_ROUNDS {
+	for round := 1; round <= MAX_ROUNDS; round++ {
 		if round == 0 {
 			continue
 		}
 
-		if rounds[round][end] > rounds[round-1][end] {
+		if rounds[round][end] < rounds[round-1][end] {
 			pareto = append(pareto, Journey{
 				NumLegs:     round,
 				ArrivalTime: rounds[round][end],
