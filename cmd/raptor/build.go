@@ -19,12 +19,17 @@ func main() {
 
 	switch os.Args[1] {
 	case "serve":
-		serverPort := flag.String("port", "3456", "port to serve on")
-		flag.Parse()
-		debug.StartServer(*serverPort)
+		serveCmd := flag.NewFlagSet("serve", flag.ExitOnError)
+		serverPort := serveCmd.String("port", "3456", "port to serve on")
+		gtfsPath := serveCmd.String("gtfs", "./gtfs.zip", "path to GTFS zip file")
+		serveCmd.Parse(os.Args[2:])
+
+		debug.StartServer(*serverPort, *gtfsPath)
 	case "build":
-		gtfsPath := flag.String("gtfs", "./gtfs.zip", "path to GTFS zip file")
-		flag.Parse()
+		buildCmd := flag.NewFlagSet("build", flag.ExitOnError)
+		gtfsPath := buildCmd.String("gtfs", "./gtfs.zip", "path to GTFS zip file")
+		buildCmd.Parse(os.Args[2:])
+
 		gtfsTable, err := gtfs.ParseGtfs(*gtfsPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)

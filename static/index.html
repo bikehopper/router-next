@@ -9,15 +9,20 @@
     <div style="display:flex;">
         <div id='map' style='width: 850px; height: 700px;'></div>
         <div style="display:flex;flex-direction:column;gap:10px;">
-            <label style="display:flex;flex-direction:column;">
+            <!-- <label style="display:flex;flex-direction:column;">
                 <span>Start Stop Id</span>
                 <input id="start" placeholder="15279" />
             </label>
             <label style="display:flex;flex-direction:column;">
                 <span>End Stop Id</span>
                 <input id="end" placeholder="54788" />
+            </label> -->
+            <label style="display:flex;flex-direction:column;">
+                <span>Route ID</span>
+                <input id="routeId" placeholder="1" />
             </label>
             <button id="route" onclick="route()">Route</button>
+            <div id="resp-stops"></div>
         </div>
     </div>
 
@@ -30,11 +35,10 @@
         });
 
         async function route() {
-            const start = document.getElementById('start').value;
-            const end = document.getElementById('end').value;
-            const response = await fetch(`http://localhost:3456/route?from=${start}&to=${end}`);
+            const routeId = document.getElementById('routeId').value;
+            const response = await fetch(`http://localhost:3456/routes/${routeId}/stops`);
             const newRoute = await response.json();
-            console.log(newRoute);
+            document.getElementById('resp-stops').innerText = newRoute.join(", ");
         }
     </script>
 </body>
