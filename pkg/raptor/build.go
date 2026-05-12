@@ -268,7 +268,7 @@ func groupRouteSegments(
 		for stopIdx, stopId := range route.stopSequence {
 			routeSegmentsByStop[cursor[stopId]] = RouteSegment{
 				RouteId:   types.RouteID(routeId),
-				StopIndex: uint32(stopIdx),
+				StopIndex: StopIndex(stopIdx),
 			}
 			cursor[stopId]++
 		}
