@@ -27,7 +27,7 @@ func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime typ
 	// parents[k][s]: the label preceding rounds[k][s] for route reconstruction
 	parents := make([][]Label, MAX_ROUNDS+1)
 
-	// rounds[k][s]: best arrival at stop s with k or fewer trasnit legs
+	// rounds[k][s]: best arrival at stop s with k or fewer transit legs
 	rounds := make([][]types.Timestamp, MAX_ROUNDS+1)
 	for k := range rounds {
 		parents[k] = make([]Label, numStops)
@@ -67,7 +67,8 @@ func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime typ
 
 		for _, stopId := range stopsUpdated {
 			for _, segment := range rt.RoutesForStop(stopId) {
-				if existing, ok := routeEarliestStop[segment.RouteId]; !ok || segment.StopIndex < existing {
+				existing, ok := routeEarliestStop[segment.RouteId]
+				if !ok || segment.StopIndex < existing {
 					routeEarliestStop[segment.RouteId] = segment.StopIndex
 				}
 			}
@@ -142,6 +143,7 @@ func (rt *RaptorTable) Route(start types.StopID, end types.StopID, startTime typ
 		// TODO: use precomputed street network transfers to update
 		// the best[s] and rounds[k][s] entries and add to nextStopsUpdated
 
+		// seed the next round with the updated stops for this round
 		stopsUpdated = nextStopsUpdated
 	}
 
