@@ -59,6 +59,39 @@ type RaptorTable struct {
 	FirstRouteSegmentOfStop StopRouteSegmentOffsets
 }
 
+// func (rt *RaptorTable) SnapshotString() string {
+// 	MinTransferTimeStrSlice := make([]string, len(rt.MinTransferTime))
+// 	for i, transferTime := range rt.MinTransferTime {
+// 		MinTransferTimeStrSlice[i] = strconv.Itoa(int(transferTime))
+// 	}
+// 	MinTransferTimeStr := s.Join(MinTransferTimeStrSlice, ",")
+
+// 	StopIdsByRouteSlice := make([]string, len(rt.StopIdsByRoute))
+// 	for i, stopId := range rt.StopIdsByRoute {
+// 		StopIdsByRouteSlice[i] = strconv.Itoa(int(stopId))
+// 	}
+// 	StopIdsByRouteStr := s.Join(StopIdsByRouteSlice, ",")
+
+// 	FirstStopIdOfRouteSlice := make([]string, len(rt.FirstStopIdOfRoute))
+// 	for i, firstStopIdOfRoute := range rt.FirstStopIdOfRoute {
+// 		FirstStopIdOfRouteSlice[i] = strconv.Itoa(int(firstStopIdOfRoute))
+// 	}
+// 	FirstStopIdOfRouteStr := s.Join(FirstStopIdOfRouteSlice, ",")
+
+// 	FirstTripOfRouteSlice := make([]string, len(rt.FirstTripOfRoute))
+// 	for i, firstTripOfRoute := range rt.FirstTripOfRoute {
+// 		FirstTripOfRouteSlice[i] = strconv.Itoa(int(firstTripOfRoute))
+// 	}
+// 	FirstTripOfRouteStr := s.Join(FirstTripOfRouteSlice, ",")
+
+// 	NumTripsInRouteSlice := make([]string, len(rt.NumTripsInRoute))
+// 	for i, numTripInROute := range rt.NumTripsInRoute {
+// 		NumTripsInRouteSlice[i] = strconv.Itoa(int(numTripInROute))
+// 	}
+// 	NumTripsInRouteStr := s.Join(NumTripsInRouteSlice, ",")
+
+// }
+
 func (rt *RaptorTable) NumStops() int  { return len(rt.Stops) }
 func (rt *RaptorTable) NumRoutes() int { return len(rt.NumTripsInRoute) }
 
