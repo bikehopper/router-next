@@ -2,6 +2,7 @@ package utils
 
 import (
 	"reflect"
+	"router/pkg/types"
 	"strconv"
 	"strings"
 )
@@ -28,9 +29,9 @@ func SizeOf[T any]() int {
 	return int(reflect.TypeFor[T]().Size())
 }
 
-const SnapshotLineWidth = 40
+const SnapshotLineWidth = 20
 
-func SnapshotStr(arr []uint32) string {
+func SnapshotStr[T uint32 | types.StopID](arr []T) string {
 	N := len(arr)
 	numRows := N / SnapshotLineWidth
 	lastRowLength := N % SnapshotLineWidth

@@ -18,7 +18,10 @@ func TestSnapshotStr(t *testing.T) {
 	moreThanLineWidth := make([]uint32, 44)
 
 	formatted2 := SnapshotStr(moreThanLineWidth[:])
-	expected2 := "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n0,0,0,0"
+	expected2 :=
+		`0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+0,0,0,0`
 	if formatted2 != expected2 {
 		t.Errorf("got:\n%s\nexpected:%s", formatted2, expected2)
 	}
