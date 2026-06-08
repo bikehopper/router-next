@@ -28,9 +28,11 @@ type StopEvent struct {
 	DepartureTime types.Timestamp
 }
 
+type StopIndex uint32
+
 type RouteSegment struct {
 	RouteId   types.RouteID
-	StopIndex uint32
+	StopIndex StopIndex
 }
 
 type RouteStopOffsets []uint32        // indexed by types.RouteID
