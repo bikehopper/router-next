@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"router/pkg/gtfs"
 	"router/pkg/types"
@@ -14,7 +15,9 @@ import (
 )
 
 func BuildRaptorTable(gtfsTable *gtfs.GTFSTable, date gtfs.GTFSDate) (*RaptorTable, error) {
-	println("Building raptor table")
+	println("Building RAPTOR table")
+
+	start := time.Now()
 
 	gtfsStopIdMap := enumerateGtfsStops(gtfsTable.Stops)
 	numStops := len(gtfsTable.Stops)
@@ -31,7 +34,7 @@ func BuildRaptorTable(gtfsTable *gtfs.GTFSTable, date gtfs.GTFSDate) (*RaptorTab
 
 	routeSegmentsByStop, firstRouteSegmentOfStop := groupRouteSegments(raptorRoutes, numRoutesForStop, numStops)
 
-	return &RaptorTable{
+	table := RaptorTable{
 		Stops:                   gtfsTable.Stops,
 		Routes:                  routes,
 		MinTransferTime:         selfTransfers,
@@ -44,7 +47,11 @@ func BuildRaptorTable(gtfsTable *gtfs.GTFSTable, date gtfs.GTFSDate) (*RaptorTab
 		FirstRouteSegmentOfStop: firstRouteSegmentOfStop,
 		TripsByRoute:            tripsByRoute,
 		FirstTripOfRoute:        firstTripOfRoute,
-	}, nil
+	}
+
+	fmt.Printf("RAPTOR table built in %s\n", time.Since(start))
+
+	return &table, nil
 }
 
 func enumerateGtfsStops(gtfsStops []gtfs.GTFSStop) map[gtfs.GTFSStopID]types.StopID {
@@ -261,7 +268,7 @@ func groupRouteSegments(
 		for stopIdx, stopId := range route.stopSequence {
 			routeSegmentsByStop[cursor[stopId]] = RouteSegment{
 				RouteId:   types.RouteID(routeId),
-				StopIndex: uint32(stopIdx),
+				StopIndex: StopIndex(stopIdx),
 			}
 			cursor[stopId]++
 		}

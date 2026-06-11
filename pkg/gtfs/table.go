@@ -112,6 +112,7 @@ func (gt *GTFSTable) serviceActiveByCalendar(serviceId GTFSServiceID, date GTFSD
 	service, ok := gt.servicesById[serviceId]
 	if !ok {
 		fmt.Printf("WARN: unknown service_id %q\n", serviceId)
+		return false
 	}
 
 	if !(service.StartDate <= date && date <= service.EndDate) {

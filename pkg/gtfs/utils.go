@@ -1,6 +1,7 @@
 package gtfs
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -31,12 +32,18 @@ func parseBool(s string) bool {
 
 func parseTime(date GTFSDate) (time.Time, error) {
 	s := string(date)
-	year, err1 := strconv.Atoi(s[:4])
-	month, err2 := strconv.Atoi(s[4:6])
-	day, err3 := strconv.Atoi(s[6:])
 
-	if err1 != nil || err2 != nil || err3 != nil {
-		return time.Time{}, fmt.Errorf("invalid date: %s", s)
+	var errs []error
+
+	year, err := strconv.Atoi(s[:4])
+	errs = append(errs, err)
+	month, err := strconv.Atoi(s[4:6])
+	errs = append(errs, err)
+	day, err := strconv.Atoi(s[6:])
+	errs = append(errs, err)
+
+	if err := errors.Join(errs...); err != nil {
+		return time.Time{}, fmt.Errorf("invalid date: %s %w", s, err)
 	}
 
 	return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC), nil
