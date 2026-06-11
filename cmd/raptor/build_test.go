@@ -12,21 +12,17 @@ import (
 	"testing"
 )
 
-var snapshotId int = 1
-
-func assertSnapshotMatches(t *testing.T, rt *raptor.RaptorTable) {
+func assertSnapshotMatches(t *testing.T, rt *raptor.RaptorTable, snapshotId string) {
 	snapshot := rt.SnapshotString()
-	fileName := fmt.Sprintf("./snapshots/%d.txt", snapshotId)
+	fileName := fmt.Sprintf("./snapshots/%s.txt", snapshotId)
 	bytes, err := os.ReadFile(fileName)
 
 	if (err == nil && string(bytes) != snapshot) || errors.Is(err, os.ErrNotExist) {
-		t.Errorf("%d.txt snapshot mismatch, regenrating", snapshotId)
+		t.Errorf("%s.txt snapshot mismatch, regenrating", snapshotId)
 		os.WriteFile(fileName, []byte(snapshot), 0644)
 	} else if err != nil {
 		log.Fatalln(err)
 	}
-
-	snapshotId++
 }
 
 func TestRaptorBuild(t *testing.T) {
@@ -35,17 +31,19 @@ func TestRaptorBuild(t *testing.T) {
 		t.Errorf("GTFS parsing failed")
 	}
 
-	raptorTable1, err := raptor.BuildRaptorTable(gtfsTable, gtfs.TimeToGTFSDate(time.Date(2026, time.April, 9, 0, 0, 0, 0, time.UTC)))
+	d1 := time.Date(2026, time.April, 9, 0, 0, 0, 0, time.UTC)
+	raptorTable1, err := raptor.BuildRaptorTable(gtfsTable, gtfs.TimeToGTFSDate(d1))
 	if err != nil {
 		t.Errorf("Rator Table generation failed")
 	}
 
-	assertSnapshotMatches(t, raptorTable1)
+	assertSnapshotMatches(t, raptorTable1, d1.Format(time.DateOnly))
 
-	raptorTable2, err := raptor.BuildRaptorTable(gtfsTable, gtfs.TimeToGTFSDate(time.Date(2026, time.April, 20, 0, 0, 0, 0, time.UTC)))
+	d2 := time.Date(2026, time.April, 20, 0, 0, 0, 0, time.UTC)
+	raptorTable2, err := raptor.BuildRaptorTable(gtfsTable, gtfs.TimeToGTFSDate(d2))
 	if err != nil {
 		t.Errorf("Rator Table generation failed")
 	}
 
-	assertSnapshotMatches(t, raptorTable2)
+	assertSnapshotMatches(t, raptorTable2, d2.Format((time.DateOnly)))
 }
