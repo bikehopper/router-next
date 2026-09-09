@@ -1,6 +1,7 @@
 package raptor
 
 import (
+	"fmt"
 	"router/pkg/gtfs"
 	"router/pkg/types"
 	"router/pkg/utils"
@@ -28,9 +29,11 @@ type StopEvent struct {
 	DepartureTime types.Timestamp
 }
 
+type StopIndex uint32
+
 type RouteSegment struct {
 	RouteId   types.RouteID
-	StopIndex uint32
+	StopIndex StopIndex
 }
 
 type RouteStopOffsets []uint32        // indexed by types.RouteID
@@ -57,6 +60,54 @@ type RaptorTable struct {
 
 	RouteSegmentsByStop     []RouteSegment
 	FirstRouteSegmentOfStop StopRouteSegmentOffsets
+}
+
+func (rt *RaptorTable) SnapshotString() string {
+	return fmt.Sprintf(
+		`
+MinTransferTime: %d
+---------------------------------------------------------------
+%s
+
+StopIdsByRoute: %d
+---------------------------------------------------------------
+%s
+
+FirstStopIdOfRoute: %d
+---------------------------------------------------------------
+%s
+
+FirstTripOfRoute: %d
+---------------------------------------------------------------
+%s
+
+NumTripsInRoute: %d
+---------------------------------------------------------------
+%s
+
+FirstStopEventOfRoute: %d
+---------------------------------------------------------------
+%s
+
+FirstRouteSegmentOfStop: %d
+---------------------------------------------------------------
+%s
+`,
+		len(rt.MinTransferTime),
+		utils.SnapshotStr(rt.MinTransferTime),
+		len(rt.StopIdsByRoute),
+		utils.SnapshotStr(rt.StopIdsByRoute),
+		len(rt.FirstStopIdOfRoute),
+		utils.SnapshotStr(rt.FirstStopIdOfRoute),
+		len(rt.FirstTripOfRoute),
+		utils.SnapshotStr(rt.FirstTripOfRoute),
+		len(rt.NumTripsInRoute),
+		utils.SnapshotStr(rt.NumTripsInRoute),
+		len(rt.FirstStopEventOfRoute),
+		utils.SnapshotStr(rt.FirstStopEventOfRoute),
+		len(rt.FirstRouteSegmentOfStop),
+		utils.SnapshotStr(rt.FirstRouteSegmentOfStop),
+	)
 }
 
 func (rt *RaptorTable) NumStops() int  { return len(rt.Stops) }
