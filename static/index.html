@@ -1,0 +1,46 @@
+<html>
+
+<head>
+    <script src='https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css' rel='stylesheet' />
+</head>
+
+<body>
+    <div style="display:flex;">
+        <div id='map' style='width: 850px; height: 700px;'></div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <!-- <label style="display:flex;flex-direction:column;">
+                <span>Start Stop Id</span>
+                <input id="start" placeholder="15279" />
+            </label>
+            <label style="display:flex;flex-direction:column;">
+                <span>End Stop Id</span>
+                <input id="end" placeholder="54788" />
+            </label> -->
+            <label style="display:flex;flex-direction:column;">
+                <span>Route ID</span>
+                <input id="routeId" placeholder="1" />
+            </label>
+            <button id="route" onclick="route()">Route</button>
+            <div id="resp-stops"></div>
+        </div>
+    </div>
+
+    <script>
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://tiles.openfreemap.org/styles/bright', // stylesheet location
+            center: [-122.447890, 37.762667], // starting position [lng, lat]
+            zoom: 12 // starting zoom
+        });
+
+        async function route() {
+            const routeId = document.getElementById('routeId').value;
+            const response = await fetch(`http://localhost:3456/routes/${routeId}/stops`);
+            const newRoute = await response.json();
+            document.getElementById('resp-stops').innerText = newRoute.join(", ");
+        }
+    </script>
+</body>
+
+</html>
